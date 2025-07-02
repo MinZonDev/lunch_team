@@ -1,8 +1,6 @@
 package com.lunch_team.service;
 
-import com.lunch_team.dto.AuthResponse;
-import com.lunch_team.dto.LoginDto;
-import com.lunch_team.dto.RegisterDto;
+import com.lunch_team.dto.*;
 import com.lunch_team.entity.Role;
 import com.lunch_team.entity.User;
 import com.lunch_team.exception.BusinessException;
@@ -24,7 +22,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -48,15 +48,13 @@ public class AuthService {
     }
 
     public User register(RegisterDto registerDto) {
-        // Kiểm tra username đã tồn tại
         if (userRepository.existsByUsername(registerDto.getUsername())) {
             throw BusinessException.conflict("Tên đăng nhập đã tồn tại");
         }
 
-        // Kiểm tra email đã tồn tại (nếu cần)
-        // if (userRepository.existsByEmail(registerDto.getEmail())) {
-        //     throw BusinessException.conflict("Email đã được sử dụng");
-        // }
+         if (userRepository.existsByEmail(registerDto.getEmail())) {
+             throw BusinessException.conflict("Email đã được sử dụng");
+         }
 
         try {
             User user = new User();
@@ -65,7 +63,6 @@ public class AuthService {
             user.setEmail(registerDto.getEmail());
             user.setPassword(passwordEncoder.encode(registerDto.getPassword()));
 
-            // Tìm role mặc định
             Role role = roleRepository.findByName("ROLE_USER")
                     .orElseThrow(() -> BusinessException.notFound("Vai trò mặc định không tồn tại"));
 
@@ -95,7 +92,6 @@ public class AuthService {
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             String token = jwtService.generateToken(userDetails);
 
-            // Chuyển đổi Collection thành Set
             Set<GrantedAuthority> authorities = new HashSet<>(authentication.getAuthorities());
 
             return new AuthResponse(token, loginDto.getUsername(), authorities);
@@ -107,5 +103,77 @@ public class AuthService {
         } catch (Exception e) {
             throw new BusinessException("Lỗi đăng nhập: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    public UserProfileDto getMyProfile(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> BusinessException.notFound("Người dùng không tồn tại"));
+
+        return convertToUserProfileDto(user);
+    }
+
+    public UserProfileDto updateMyProfile(String username, UpdateProfileDto updateProfileDto) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> BusinessException.notFound("Người dùng không tồn tại"));
+
+        if (!user.getEmail().equals(updateProfileDto.getEmail()) &&
+                userRepository.existsByEmail(updateProfileDto.getEmail())) {
+            throw BusinessException.conflict("Email đã được sử dụng");
+        }
+
+        try {
+            user.setName(updateProfileDto.getName());
+            user.setEmail(updateProfileDto.getEmail());
+
+            User updatedUser = userRepository.save(user);
+            return convertToUserProfileDto(updatedUser);
+
+        } catch (Exception e) {
+            throw new BusinessException("Lỗi khi cập nhật thông tin: " + e.getMessage());
+        }
+    }
+
+    public UserProfileDto getUserProfile(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> BusinessException.notFound("Người dùng không tồn tại"));
+
+        UserProfileDto profile = convertToUserProfileDto(user);
+        profile.setDeposit(null);
+        return profile;
+    }
+
+    public List<UserProfileDto> getAllUsers() {
+        List<User> users = userRepository.findAll();
+        return users.stream()
+                .map(this::convertToUserProfileDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<UserProfileDto> searchUsers(String keyword) {
+        List<User> users = userRepository.findByNameContainingIgnoreCaseOrUsernameContainingIgnoreCase(
+                keyword, keyword);
+
+        return users.stream()
+                .map(user -> {
+                    UserProfileDto profile = convertToUserProfileDto(user);
+                    profile.setDeposit(null); // Ẩn thông tin deposit trong tìm kiếm
+                    return profile;
+                })
+                .collect(Collectors.toList());
+    }
+
+    private UserProfileDto convertToUserProfileDto(User user) {
+        Set<String> authorityNames = user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toSet());
+
+        return new UserProfileDto(
+                user.getId(),
+                user.getName(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getDeposit(),
+                authorityNames
+        );
     }
 }
