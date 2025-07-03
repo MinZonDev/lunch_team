@@ -13,19 +13,28 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderItem {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private int quantity;
-    private BigDecimal amount;
-
-    @ManyToOne
-    @JoinColumn(name = "food_item_id")
-    private FoodItem foodItem;
-
-    @ManyToOne
-    @JoinColumn(name = "order_id")
+    // Liên kết với đơn hàng cha
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false)
     private Order order;
-}
 
+    // Món ăn được chọn từ Menu
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "menu_item_id", nullable = false)
+    private MenuItem menuItem;
+
+    @Column(nullable = false)
+    private int quantity;
+
+    // Lưu lại giá tại thời điểm đặt hàng để tránh ảnh hưởng nếu giá món ăn thay đổi
+    @Column(name = "price_at_order", nullable = false)
+    private BigDecimal priceAtOrder;
+
+    @Column(columnDefinition = "TEXT")
+    private String note;
+}

@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -19,18 +19,33 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
+    // Người dùng đặt hàng
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    private Date orderDate;
+    // Đơn hàng này thuộc về menu nào
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "menu_id", nullable = false)
+    private Menu menu;
+
+    @Column(name = "total_amount", nullable = false)
     private BigDecimal totalAmount;
 
-    @Enumerated(EnumType.STRING)
-    private PaymentMethod paymentMethod;
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
 
-    private boolean isPaid;
+    // Trạng thái đơn hàng, ví dụ: PENDING, CONFIRMED, PAID, CANCELLED
+    @Column(name = "status")
+    private String status;
 
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    // Các món trong đơn hàng
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> orderItems;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        status = "PENDING";
+    }
 }
